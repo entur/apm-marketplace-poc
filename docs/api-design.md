@@ -127,7 +127,24 @@ GET /api/v1/routes?page=2&size=20
 
 ### OpenAPI / Swagger
 
-All REST APIs must have an OpenAPI specification:
+All REST APIs must have an OpenAPI specification. There are two approaches:
+
+#### Contract-First (Preferred for Kotlin)
+
+Define the API specification before writing code. Use **OpenAPI Generator** to generate interfaces and DTOs:
+
+1. Write modular OpenAPI specs in `specs/`
+2. Bundle with **Redocly CLI** into a single spec
+3. Generate Kotlin Spring interfaces and DTOs at build time
+4. Implement the generated interfaces in your controllers
+
+This approach ensures the API contract is always in sync with implementation and enables parallel frontend/backend development.
+
+See the [Contract-First OpenAPI](#contract-first-openapi) section below for full details.
+
+#### Code-First (Simpler Projects)
+
+Annotate controllers and let springdoc-openapi generate the specification:
 
 ```java
 // Spring Boot - springdoc-openapi
@@ -139,6 +156,194 @@ public ResponseEntity<RouteResponse> getRoute(@PathVariable String id) { ... }
 ```
 
 Serve the OpenAPI spec at `/api-docs` or `/v3/api-docs` (Spring Boot default).
+
+### Entur Springdoc Starter
+
+For code-first APIs, use the **`entur-springdoc-starter`** (`org.entur.openapi:entur-springdoc-starter`) alongside springdoc-openapi. This starter extends springdoc with Entur-specific OpenAPI extensions that are required by the Entur developer portal and API gateway.
+
+#### Setup
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:<version>")
+    implementation("org.entur.openapi:entur-springdoc-starter:<version>")  // check Artifactory for latest
+}
+```
+
+The starter is published to Entur's JFrog Artifactory. Check [Artifactory](https://entur2.jfrog.io) for the latest version. See [java.md](java.md#artifactory-jfrog) for repository configuration.
+
+Configure springdoc defaults:
+
+```yaml
+# application.yml
+springdoc:
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
+```
+
+#### `x-entur-metadata` Extension
+
+Every API must declare `x-entur-metadata` on its `info` object. This identifies the API in Entur's developer portal. Use the `EnturMetadata` class provided by the starter.
+
+Kotlin:
+
+```kotlin
+@Configuration
+class OpenApiConfig {
+    @Bean
+    fun openApi(): OpenAPI {
+        return OpenAPI()
+            .info(Info()
+                .title("Items API")
+                .version("1.0.0")
+                .description("Manage items")
+                .enturMetadata(EnturMetadata()
+                    .id("items")                    // unique API identifier in Entur
+                )
+            )
+    }
+}
+```
+
+Java:
+
+```java
+import static org.entur.openapi.EnturMetadataKt.enturMetadata;
+
+@Configuration
+public class OpenApiConfig {
+    @Bean
+    public OpenAPI openApi() {
+        var info = new Info()
+                .title("Items API")
+                .version("1.0.0")
+                .description("Manage items");
+
+        enturMetadata(info, new EnturMetadata().id("items"));
+
+        return new OpenAPI().info(info);
+    }
+}
+```
+
+The `parentId` field is available for APIs that are developed independently across microservices but should appear as a single specification to consumers:
+
+```kotlin
+EnturMetadata()
+    .id("items-subset")
+    .parentId("items")    // content shown under the parent API, not standalone
+```
+
+#### `x-entur-permissions` Extension (Automatic)
+
+The starter **automatically generates** `x-entur-permissions` on every operation based on the `@PreAuthorize` annotation. No code changes are needed -- if your controller already uses `@PreAuthorize("hasPermission('resource', 'les')")`, the extension is added to the OpenAPI spec at runtime.
+
+The parser understands:
+- `hasPermission('resource', 'access')` -- single permission
+- `hasPermission('a', 'les') AND hasPermission('b', 'les')` -- all required (`all`)
+- `hasPermission('a', 'les') OR hasPermission('b', 'les')` -- any sufficient (`any`)
+- Nested combinations of `AND`/`OR`
+- Non-permission nodes like `hasAnyAuthority('partner')` are skipped
+
+Example controller:
+
+```kotlin
+@GetMapping("/items")
+@Operation(summary = "Get items")
+@PreAuthorize("hasPermission('items', 'les') || hasPermission('items-global', 'les')")
+fun getItems(): List<Item> { ... }
+```
+
+This produces the following in the OpenAPI spec:
+
+```json
+"x-entur-permissions": {
+  "value": {
+    "any": ["items:les", "items-global:les"]
+  }
+}
+```
+
+#### `@EnturPermissions` Override
+
+If the auto-generated permissions from `@PreAuthorize` are insufficient or you need to override them, use the `@EnturPermissions` annotation:
+
+```kotlin
+@GetMapping("/items")
+@PreAuthorize("hasPermission('items', 'les') || hasPermission('items-global', 'les')")
+@EnturPermissions(
+    description = "Requires read access to items or global items",
+    value = EnturPermissionsValue(any = [
+        EnturPermissionsValue("items:les"),
+        EnturPermissionsValue("something-else:les"),
+    ])
+)
+fun getItems(): List<Item> { ... }
+```
+
+If only `description` is set (without `value`), the `@PreAuthorize` annotation is still used for the permission value.
+
+#### `@SchemaExample` Annotation
+
+Adding examples to OpenAPI schemas using standard Swagger annotations can be verbose. The starter provides `@SchemaExample` to generate examples from actual class instances, ensuring examples compile and stay in sync with the schema.
+
+Kotlin:
+
+```kotlin
+data class Item(
+    val id: String,
+    val description: String
+) {
+    companion object {
+        @SchemaExample
+        @JvmStatic
+        fun example(): Item = Item("foo", "Foo")
+    }
+}
+```
+
+Java:
+
+```java
+public record Item(String id, String description) {
+    @SchemaExample
+    public static Item example() {
+        return new Item("foo", "Foo");
+    }
+}
+```
+
+The example method must be:
+- `static` (`@JvmStatic` in Kotlin companion objects)
+- Annotated with `@SchemaExample`
+- Return an instance of the enclosing class
+
+The example is serialized using the application's `ObjectMapper` and added to the schema in the OpenAPI spec.
+
+#### Custom TypeNameResolver
+
+The starter supports a custom `TypeNameResolver` bean for controlling how generic types appear in the OpenAPI schema. This is useful for cleaning up names of generic wrapper types:
+
+```kotlin
+@Bean
+fun customTypeNameResolver(): TypeNameResolver {
+    return object : TypeNameResolver() {
+        override fun nameForGenericType(
+            type: JavaType,
+            options: Set<Options?>?
+        ): String? {
+            val name = super.nameForGenericType(type, options)
+            // "PageDtoItem" becomes "PageItem"
+            return if (type.rawClass?.isAssignableFrom(PageDto::class.java) == true) {
+                name.replaceFirst("PageDto", "Page")
+            } else {
+                name
+            }
+        }
+    }
+}
+```
 
 ## gRPC APIs
 
@@ -202,6 +407,161 @@ gRPC is supported for cluster-internal and frontend-external traffic. **Apigee d
 - Increment the major version only for breaking changes
 - Support the previous version for a deprecation period (minimum 6 months)
 - Breaking changes include: removing fields, changing field types, changing URL structure, changing error codes
+
+## Contract-First OpenAPI
+
+The preferred approach for Kotlin Spring Boot APIs is **contract-first development** using OpenAPI Generator.
+
+### Directory Structure
+
+```text
+specs/
+  products.yaml                    # Main entry point
+  openapi.json                     # Bundled output (gitignored)
+  schemas/
+    _index.yaml                   # Schema index
+    Version.yaml                  # Individual schemas
+    enums/
+      VersionStatus.yaml          # Enum definitions
+  parameters/
+    _index.yaml                   # Parameter index
+    header/
+      et-client-name.yaml
+      x-correlation-id.yaml
+    path/
+      id.yaml
+  paths/
+    VersionV3.yaml                # Path definitions
+```
+
+### Main Spec File
+
+```yaml
+openapi: "3.0.3"
+info:
+  version: "1.0.0"
+  title: My API
+  contact:
+    name: Team Name
+    email: team@entur.org
+servers:
+  - url: "https://api.entur.io/my-api"
+    description: "Production environment"
+  - url: "https://api.staging.entur.io/my-api"
+    description: "Staging environment"
+  - url: "https://api.dev.entur.io/my-api"
+    description: "Development environment"
+tags:
+  - name: version
+    description: Version management endpoints
+paths:
+  /v3/versions/{id}:
+    $ref: "./paths/VersionV3.yaml#/~1v3~1versions~1{id}"
+```
+
+### Schema with Read-Only Fields
+
+Use `readOnly: true` for server-generated fields like `created` and `changed`:
+
+```yaml
+type: object
+required:
+  - id
+  - status
+  - startDate
+properties:
+  id:
+    pattern: "^([A-Z]{3}):Version:([0-9A-Za-z_\\-]*)$"
+    type: string
+  status:
+    $ref: "./enums/VersionStatus.yaml"
+  startDate:
+    type: string
+    format: date
+  endDate:
+    type: string
+    format: date
+allOf:
+  - type: object
+    properties:
+      created:
+        type: string
+        format: date-time
+        readOnly: true
+      changed:
+        type: string
+        format: date-time
+        readOnly: true
+```
+
+### Bundling and Code Generation (Gradle)
+
+```kotlin
+// build.gradle.kts
+openApiGenerate {
+    validateSpec = true
+    inputSpec = "specs/openapi.json"
+    outputDir = "$generatedSourcesDir/openapi"
+    generatorName = "kotlin-spring"
+    apiPackage = "org.entur.myapp.api"
+    modelPackage = "org.entur.myapp.dto"
+    configOptions = mapOf(
+        "interfaceOnly" to "true",         // Generate interfaces, not implementations
+        "useBeanValidation" to "true",     // Add Jakarta validation annotations
+        "useSpringBoot3" to "true",        // Spring Boot 3 / Jakarta EE
+        "exceptionHandler" to "false",     // Use custom exception handler
+        "useTags" to "true",               // Group by tags
+    )
+    typeMappings = mapOf(
+        "java.time.OffsetDateTime" to "java.time.ZonedDateTime",
+        "kotlin.Float" to "java.math.BigDecimal",
+    )
+}
+```
+
+Bundling uses Redocly CLI (via Docker or npm):
+
+```kotlin
+// Gradle task using Docker
+register("bundleOpenApiSpecification", Exec::class) {
+    commandLine("docker", "run", "--rm",
+        "-v", "$projectDirPath/specs:/spec",
+        "redocly/cli", "bundle", "products.yaml", "-o", "openapi.json")
+}
+
+// Build chain
+compileKotlin { dependsOn("openApiGenerate") }
+openApiGenerate { dependsOn("bundleOpenApiSpecification") }
+```
+
+### API Spec Linting in CI
+
+Lint the API specification on PRs that modify `specs/`:
+
+```yaml
+name: lint-api
+on:
+  pull_request:
+    paths:
+      - 'specs/**'
+jobs:
+  api-lint:
+    uses: entur/gha-api/.github/workflows/lint.yml@v5
+    with:
+      spec: specs/*.yaml
+```
+
+### Publishing to Developer Portal
+
+After deploying to production, publish the bundled spec to Entur's developer portal:
+
+```yaml
+openapi-publish:
+  uses: entur/gha-api/.github/workflows/publish.yml@v5
+  with:
+    artifact: openapi-spec
+    visibility: partner       # partner | public | internal
+```
 
 ## Rate Limiting and Resilience
 

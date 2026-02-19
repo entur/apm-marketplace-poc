@@ -508,6 +508,266 @@ terraform-apply:
 
 All workflows accept the `environment` input.
 
+## Preferred CI/CD Structure
+
+The preferred pattern splits CI/CD into multiple focused workflow files instead of a single monolithic pipeline:
+
+| File | Trigger | Purpose |
+|------|---------|---------|
+| `ci.yml` | `workflow_call` | Reusable CI build (lint, build, test, scan, push) |
+| `ci-pr.yml` | `pull_request` to main | PR title lint + CI build |
+| `ci-feature.yml` | Push to non-main branches | CI build if no open PR exists |
+| `deploy.yml` | Push to main | Build + deploy dev -> tst -> prd |
+| `codeql.yml` | PR, push to main, schedule | Security code scanning |
+| `lint-api.yml` | PR changes to `specs/` | API spec linting |
+| `lint-helm.yml` | PR changes to `helm/` | Helm chart linting per environment |
+
+### ci.yml (Reusable Build Workflow)
+
+```yaml
+name: ci
+on:
+  workflow_call:
+    outputs:
+      image_and_tag:
+        description: Fully qualified image reference
+        value: ${{ jobs.docker-push.outputs.image_and_tag }}
+
+jobs:
+  docker-lint:
+    uses: entur/gha-docker/.github/workflows/lint.yml@v1
+    with:
+      ignore: DL3059
+
+  docker-build:
+    needs: [docker-lint]
+    uses: entur/gha-docker/.github/workflows/build.yml@v1
+    secrets:
+      BUILD_SECRETS: |
+        "ARTIFACTORY_AUTH_USER=${{ secrets.ARTIFACTORY_AUTH_USER }}"
+        "ARTIFACTORY_AUTH_TOKEN=${{ secrets.ARTIFACTORY_AUTH_TOKEN }}"
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: liberica
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew test --no-daemon
+        env:
+          ARTIFACTORY_AUTH_USER: ${{ secrets.ARTIFACTORY_AUTH_USER }}
+          ARTIFACTORY_AUTH_TOKEN: ${{ secrets.ARTIFACTORY_AUTH_TOKEN }}
+      - uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: test-results
+          path: build/test-results/test/*.xml
+          reporter: java-junit
+
+  docker-scan:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    needs: [docker-build, test]
+    uses: entur/gha-security/.github/workflows/docker-scan.yml@v2
+    with:
+      image_artifact: ${{ needs.docker-build.outputs.image_artifact }}
+    secrets: inherit
+
+  docker-push:
+    if: github.ref == 'refs/heads/main'
+    needs: [docker-scan]
+    uses: entur/gha-docker/.github/workflows/push.yml@v1
+    with:
+      extra_image_tags: "latest"
+    secrets: inherit
+```
+
+### ci-pr.yml (PR Verification)
+
+Validates PR titles follow conventional commits with JIRA ticket scopes:
+
+```yaml
+name: ci-pr
+on:
+  pull_request:
+    branches: [main]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          scopes: ETU-\d+                    # Require JIRA ticket in scope
+          ignoreLabels: dependencies          # Skip for Dependabot PRs
+          validateSingleCommit: true
+
+  build:
+    needs: [pr-lint]
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+```
+
+### ci-feature.yml (Feature Branch Build)
+
+Skips CI if there's already an open PR (ci-pr.yml handles it):
+
+```yaml
+name: ci-feature
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'src/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - id: pr-check
+        run: |
+          if gh pr list --state open --head "${{ github.ref_name }}" --json number --jq 'length > 0'; then
+            echo "skip_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: [pr-check]
+    if: needs.pr-check.outputs.skip_build == 'false'
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+```
+
+### deploy.yml (Multi-Environment Matrix Deploy)
+
+Use a **matrix strategy** for deploying to multiple environments or namespaces:
+
+```yaml
+name: deploy
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.adoc'
+
+jobs:
+  build:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  helm-deploy-dev:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: dev
+            namespace: products
+            release_name: products-api
+            values: values-kub-ent-dev.yaml
+          - environment: dev
+            namespace: products-ep
+            release_name: products-api-ep
+            values: values-kub-ent-dev-ep.yaml
+    uses: entur/gha-helm/.github/workflows/deploy.yml@v1
+    with:
+      environment: ${{ matrix.environment }}
+      chart: helm/products-api
+      namespace: ${{ matrix.namespace }}
+      release_name: ${{ matrix.release_name }}
+      image: ${{ needs.build.outputs.image_and_tag }}
+      values: ${{ matrix.values }}
+    secrets: inherit
+
+  helm-deploy-tst:
+    needs: [helm-deploy-dev, build]
+    if: ${{ success() }}
+    # ... same matrix pattern for tst environments
+
+  helm-deploy-prd:
+    needs: [helm-deploy-tst, build]
+    if: ${{ success() }}
+    # ... same matrix pattern for prd environments
+```
+
+### lint-api.yml (API Spec Linting)
+
+```yaml
+name: lint-api
+on:
+  pull_request:
+    paths: ['specs/**']
+jobs:
+  api-lint:
+    uses: entur/gha-api/.github/workflows/lint.yml@v5
+    if: github.actor != 'dependabot[bot]'
+    secrets: inherit
+    with:
+      spec: specs/*.yaml
+```
+
+### lint-helm.yml (Helm Linting per Environment)
+
+```yaml
+name: lint-helm
+on:
+  pull_request:
+    paths: ['helm/**']
+jobs:
+  helm-lint:
+    uses: entur/gha-helm/.github/workflows/lint.yml@v1
+    strategy:
+      matrix:
+        environment: [dev, dev-ep, tst, tst-ep, prd]
+    with:
+      chart: helm/my-app
+      environment: ${{ matrix.environment }}
+      values: values-kub-ent-${{ matrix.environment }}.yaml
+```
+
+### Dependabot Configuration
+
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directories: ["/"]
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "bellsoft/liberica-runtime-container"
+        versions: [">=26.0.0"]
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      flyway:
+        applies-to: version-updates
+        patterns: ["org.flywaydb*"]
+```
+
 ## Best Practices
 
 1. **Always use `secrets: inherit`** for security scanning and docs workflows
@@ -517,3 +777,9 @@ All workflows accept the `environment` input.
 5. **Run scans on every PR** -- not just on main branch pushes
 6. **Name the CodeQL workflow `codeql.yml`** -- the security tooling depends on this name
 7. **Use GitHub Environments** with protection rules for deployment approvals
+8. **Split workflows into focused files** -- separate CI, deploy, linting, and security scanning
+9. **Use matrix strategy** for deploying to multiple namespaces or environments from a single Helm chart
+10. **Use concurrency groups** with `cancel-in-progress: true` on PR and feature branch workflows
+11. **Pass build secrets via `BUILD_SECRETS`** when using multi-stage Docker builds with Artifactory
+12. **Use `paths` filters** on PR workflows to run linting only when relevant files change
+13. **Upload test reports** using `dorny/test-reporter` for visibility in GitHub PR checks

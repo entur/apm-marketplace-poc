@@ -53,9 +53,22 @@ common:
 
 ## Prometheus Metrics
 
-### Enabling Metrics
+### Entur Metrics Starter (Spring Boot)
 
-#### Spring Boot
+For Spring Boot services, use the **`metrics-spring-boot-starter`** (`org.entur.metrics:metrics-spring-boot-starter`). This starter provides autoconfiguration for Prometheus metrics with Entur-specific defaults that are assumed by [generated Grafana dashboards](https://grafana.entur.org).
+
+**Do not change default metric names** without care -- Grafana dashboards depend on these constants.
+
+#### Setup
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("org.entur.metrics:metrics-spring-boot-starter:<version>")  // check Artifactory for latest
+}
+```
+
+The starter is published to Entur's JFrog Artifactory. Check [Artifactory](https://entur2.jfrog.io) for the latest version. The `micrometer-registry-prometheus` dependency is included transitively.
 
 ```yaml
 # application.yml
@@ -69,7 +82,89 @@ management:
       application: ${spring.application.name}
 ```
 
-Add the `micrometer-registry-prometheus` dependency.
+#### What the Starter Provides Automatically
+
+The starter autoconfigures the following via `CustomMetricsAutoConfiguration`:
+
+1. **Custom histogram buckets** for HTTP server requests and Kafka consumer delay metrics, using Apdex-friendly SLO boundaries centered around 800ms. Bucket count is kept below 20 to control metric cardinality. Default SLO boundaries are 200ms, 800ms, 2.1s, and 4s, combined with distribution factors (0.01x to 32x of the 800ms target).
+
+2. **DCI (Distribution Channel) tagging** on all HTTP server request metrics. The `Entur-Distribution-Channel` request header is automatically extracted and added as a `DCI` tag (low and high cardinality). This identifies which distribution channel (web app, mobile app, partner integration) is calling the API. If the header is absent, the tag defaults to `"Unknown"`.
+
+3. **URI filtering** -- metrics are automatically dropped for noise endpoints: `/actuator/**`, `/v3/api-docs`, `/favicon.ico`.
+
+4. **Cache tag enrichment** -- for cache metrics (`cache.*`), cache names in the format `app-domain-cacheName` are parsed to add `domain` and `name` tags, enabling filtering by domain in dashboards.
+
+#### Standard Metric Names
+
+Use these constants from `org.entur.metrics.config.Defaults` for consistent metric naming:
+
+| Constant | Metric Name | Description |
+|----------|-------------|-------------|
+| `HTTP_SERVER_REQUESTS` | `http.server.requests` | HTTP server request duration (auto-registered by Spring Boot) |
+| `HTTP_CLIENT_REQUESTS` | `http.client.requests` | HTTP client request duration |
+| `QUARTZ_JOB` | `quartz.job` | Quartz scheduled job execution time |
+| `KAFKA_CONSUMER_PROCESS_TIME` | `kafka.consumer.consume.elapsed` | Kafka message processing time |
+| `KAFKA_CONSUMER_CONSUME_DELAY` | `kafka.consumer.consume.delay` | Delay from event production to consumption |
+
+#### Kafka Consumer Metrics
+
+For Kafka consumers, record processing time and consumption delay manually using the standard metric names. These work alongside the automatic Micrometer listeners provided by the Kafka starter (see [kafka.md](kafka.md#observability)):
+
+```kotlin
+// Processing time -- annotate the listener method
+@Timed(
+    value = KAFKA_CONSUMER_PROCESS_TIME,
+    percentiles = [0.50, 0.75, 0.95, 0.99],
+    extraTags = ["source", "MY_APP"]
+)
+@KafkaListener(topics = ["my-topic"], containerFactory = "enturListenerFactory")
+fun onEvent(@Payload event: MyEvent) {
+    processEvent(event)
+}
+```
+
+```kotlin
+// Consumption delay -- call as the first step in each consumer
+private fun logConsumeDelay(eventTimestamp: String, topicEvent: String, partition: Int) {
+    val timestamp = ZonedDateTime.parse(eventTimestamp)
+    val differenceMs = ChronoUnit.MILLIS.between(timestamp, ZonedDateTime.now())
+    Timer.builder(KAFKA_CONSUMER_CONSUME_DELAY)
+        .tag("eventType", topicEvent)
+        .tag("partition", partition.toString())
+        .publishPercentiles(0.5, 0.75, 0.95, 0.99)
+        .register(meterRegistry)
+        .record(differenceMs, TimeUnit.MILLISECONDS)
+}
+```
+
+#### Quartz Job Metrics
+
+For Quartz scheduled jobs, annotate the job bean and record fire delay:
+
+```kotlin
+@Timed(
+    value = QUARTZ_JOB,
+    percentiles = [0.50, 0.75, 0.95, 0.99],
+    extraTags = ["job", "MyJobName"]
+)
+override fun executeInternal(context: JobExecutionContext) {
+    registerFireDelay(context, "MyJobName", meterRegistry)
+    // ... job logic
+}
+
+private fun registerFireDelay(context: JobExecutionContext, jobName: String, meterRegistry: MeterRegistry) {
+    val scheduleTime = context.scheduledFireTime.time.toDouble()
+    val fireTime = context.fireTime.time
+    DistributionSummary.builder("${QUARTZ_JOB}.fire.delay")
+        .baseUnit("ms")
+        .description("Delay between scheduled fire time and actual fire time")
+        .tag("job", jobName)
+        .register(meterRegistry)
+        .record(fireTime - scheduleTime)
+}
+```
+
+### Enabling Metrics (Non-Spring-Boot)
 
 #### Go
 
@@ -109,7 +204,7 @@ All services should expose at minimum:
 | `process_cpu_usage` | Gauge | CPU usage |
 | `db_pool_active_connections` | Gauge | Database connection pool usage |
 
-Spring Boot with Actuator and Micrometer provides all of these automatically.
+Spring Boot with Actuator and the Entur metrics starter provides all of these automatically with optimized histogram buckets and DCI tagging.
 
 ### Custom Metrics
 
@@ -118,6 +213,7 @@ Name custom metrics following Prometheus conventions:
 - Use `snake_case`
 - Include unit as suffix: `_seconds`, `_bytes`, `_total`
 - Use labels for dimensions (e.g. `route`, `status`)
+- Keep cardinality low -- avoid high-cardinality labels like user IDs or request IDs
 
 ```java
 // Java/Kotlin

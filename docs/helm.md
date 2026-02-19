@@ -325,7 +325,130 @@ helm lint helm/my-application/ -f helm/my-application/env/dev.yaml
 helm template my-application helm/my-application/ -f helm/my-application/env/dev.yaml
 ```
 
-## Complete Example (Spring Boot)
+## ConfigMap with Environment Variables
+
+Use `configmap` for environment-specific configuration that differs per deployment:
+
+```yaml
+# values.yaml
+common:
+  configmap:
+    enabled: true
+
+# env/dev.yaml
+common:
+  configmap:
+    data:
+      SPRING_PROFILES_ACTIVE: "dev"
+      SPRING_CLOUD_GCP_SECRETMANAGER_PROJECTID: "ent-myapp-dev"
+      ENTUR_PERMISSION_PERMISSIONCACHE_URL: "http://permission-store.dev.entur.internal"
+```
+
+## Multi-Namespace Deployments
+
+When deploying the same application to multiple namespaces (e.g., different data partitions), use separate Helm values files per namespace:
+
+```text
+helm/my-app/
+  values.yaml                     # Shared defaults
+  env/
+    values-kub-ent-dev.yaml       # Primary dev namespace
+    values-kub-ent-dev-ep.yaml    # Secondary dev namespace
+    values-kub-ent-tst.yaml
+    values-kub-ent-tst-ep.yaml
+    values-kub-ent-prd.yaml
+```
+
+Override the `app` and `shortname` in secondary namespace values:
+
+```yaml
+# env/values-kub-ent-dev-ep.yaml
+common:
+  app: my-app-ep
+  shortname: myappep
+  ingress:
+    host: my-app-ep.dev.entur.io
+  postgres:
+    connectionConfig: my-app-ep
+```
+
+Deploy using matrix strategy in GitHub Actions (see [CI/CD workflows](cicd/workflows.md)).
+
+## Helm Values Naming Convention
+
+Environment-specific values files follow the naming pattern:
+
+```text
+values-kub-ent-{environment}.yaml
+values-kub-ent-{environment}-{variant}.yaml
+```
+
+Examples: `values-kub-ent-dev.yaml`, `values-kub-ent-tst-ep.yaml`, `values-kub-ent-prd.yaml`
+
+## Complete Example (Spring Boot with Kotlin)
+
+```yaml
+# values.yaml
+common:
+  app: products-api
+  shortname: products
+  team: produkt
+  ingress:
+    trafficType: api
+  service:
+    internalPort: 8086
+  configmap:
+    enabled: true
+  container:
+    image: <+artifacts.primary.image>
+    cpu: 0.5
+    memory: 1000
+    memoryLimit: 1000
+    prometheus:
+      enabled: true
+  postgres:
+    enabled: true
+    connectionConfig: products-api
+  secrets:
+    psql-credentials: [PGINSTANCES, PGHOST, PGPORT, PGPASSWORD, PGUSER]
+```
+
+```yaml
+# env/values-kub-ent-dev.yaml
+common:
+  ingress:
+    host: products-api.dev.entur.io
+  hpa:
+    spec:
+      maxReplicas: 2
+  pdb:
+    minAvailable: 40%
+  env: dev
+  configmap:
+    data:
+      SPRING_PROFILES_ACTIVE: "dev"
+      SPRING_CLOUD_GCP_SECRETMANAGER_PROJECTID: "ent-products-dev"
+```
+
+```yaml
+# env/values-kub-ent-prd.yaml
+common:
+  ingress:
+    host: products-api.entur.io
+  hpa:
+    spec:
+      maxReplicas: 5
+  pdb:
+    minAvailable: 50%
+  env: prd
+  configmap:
+    data:
+      SPRING_PROFILES_ACTIVE: "prd"
+      LOG_LEVEL: "INFO"
+      SPRING_CLOUD_GCP_SECRETMANAGER_PROJECTID: "ent-products-prd"
+```
+
+## Complete Example (Simple Spring Boot)
 
 ```yaml
 # values.yaml

@@ -4,10 +4,11 @@ Java conventions for Entur applications. Read [CONVENTIONS.md](../CONVENTIONS.md
 
 ## Runtime and Build
 
-- **Java version**: 21 or newer (LTS releases only)
+- **Java version**: 21 or newer (LTS releases, or latest stable like 25)
 - **Build tool**: Gradle with Kotlin DSL (`build.gradle.kts`)
 - **Framework**: Spring Boot 3.x
 - **Dependency management**: Gradle version catalogs (`gradle/libs.versions.toml`)
+- **JDK distribution**: Liberica JDK (preferred) or Eclipse Temurin
 
 ## Project Setup
 
@@ -440,6 +441,9 @@ The **client-side connection timeout must be shorter than the server-side timeou
 | `spring-cloud-gcp-starter-secretmanager` | Secret Manager integration |
 | `flyway-core` | Database migrations |
 | `postgresql` | PostgreSQL driver |
+| `org.entur.data:entur-kafka-spring-starter` | Kafka producer/consumer with Aiven defaults ([docs](kafka.md)) |
+| `org.entur.openapi:entur-springdoc-starter` | Entur OpenAPI extensions for springdoc ([docs](api-design.md#entur-springdoc-starter)) |
+| `org.entur.metrics:metrics-spring-boot-starter` | Prometheus metrics with Entur defaults ([docs](observability.md#entur-metrics-starter-spring-boot)) |
 
 ### Cloud SQL Connectivity
 

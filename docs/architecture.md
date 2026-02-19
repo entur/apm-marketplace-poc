@@ -15,7 +15,7 @@ Entur's official architectural methodology combines **Domain-Driven Design (DDD)
 ### Microservice Principles
 
 - Each service owns its data -- no shared databases between services
-- Services communicate via well-defined APIs (REST or gRPC) or asynchronous messaging (Pub/Sub)
+- Services communicate via well-defined APIs (REST or gRPC) or asynchronous messaging (Kafka)
 - Services are independently deployable
 - Each service has its own repository, CI/CD pipeline, and Kubernetes namespace
 - Follow the golden path: repository name = application name = namespace = Helm release name
@@ -27,20 +27,25 @@ Entur's official architectural methodology combines **Domain-Driven Design (DDD)
 ### Layered Architecture (within a service)
 
 ```text
-Controller / Handler       # HTTP request handling, input validation
+Controller                 # HTTP request handling, DTO transformation
        |
-Service / Use Case         # Business logic, orchestration
+    Mapper                 # DTO <-> Domain transformation
        |
-Repository / Client        # Data access, external service calls
+   Service                 # Business logic, validation, orchestration
        |
-Domain / Model             # Domain entities, value objects
+     DAO                   # Data access, SQL queries
+       |
+   Entity                  # Database table definition
+       |
+  Domain Model             # Domain data classes, value objects
 ```
 
-- **Controllers** handle HTTP concerns only: parse requests, validate input, format responses
-- **Services** contain business logic and orchestrate between repositories and clients
-- **Repositories** handle data persistence (database queries, cache access)
-- **Clients** handle outgoing HTTP/gRPC calls to other services
-- **Models/Entities** are plain objects with no framework dependencies
+- **Controllers** handle HTTP concerns only: receive DTOs, call mappers, return DTOs with status codes
+- **Mappers** transform between generated DTOs and domain models at the API boundary
+- **Services** contain business logic and orchestrate between DAOs. Define service interfaces with implementations
+- **DAOs** handle data persistence (SQL queries via Exposed or Spring Data)
+- **Entities** define database table structure (Exposed table objects or JPA entities)
+- **Domain Models** are plain Kotlin data classes with no framework dependencies
 
 ### Key Principles
 
@@ -48,6 +53,80 @@ Domain / Model             # Domain entities, value objects
 - Use dependency injection for testability
 - Keep controllers thin -- delegate to services
 - Don't let database entities leak into API responses (use DTOs/mappers)
+- Service layer works exclusively with domain models, never with DTOs
+- Define service interfaces separately from implementations for testability
+
+### Package-by-Feature
+
+Organize code by domain feature, not by technical layer. Each feature package contains all its layers:
+
+```text
+org.entur.myapp/
+  common/
+    api/                   # Shared API utilities (ErrorResponse, GlobalExceptionHandler)
+    base/                  # Base interfaces (BaseDAO, BaseService)
+    exception/             # Typed exceptions
+    utils/                 # Shared utilities, constants
+  config/                  # Spring configuration classes
+  version/                 # Feature package
+    Version.kt             # Domain model (data class)
+    VersionController.kt   # REST controller (implements generated interface)
+    VersionDAO.kt           # Data access object
+    VersionEntity.kt        # Database table definition (Exposed)
+    VersionInputValidator.kt # Input validation rules
+    VersionMapper.kt        # DTO <-> Domain mapper
+    VersionService.kt       # Service interface
+    VersionServiceImpl.kt   # Service implementation
+  priceableobject/         # Another feature package
+    PriceableObjectEntity.kt
+    PriceableObjectDAO.kt
+    fareprice/             # Sub-feature
+      FarePriceEntity.kt
+```
+
+### Mapper Pattern
+
+Use dedicated mapper classes to transform between generated DTOs and domain models. This is the preferred pattern when using contract-first OpenAPI development:
+
+```text
+Controller Layer       ← receives/returns DTOs
+       ↓
+   Mapper Layer        ← transforms DTO ↔ Domain
+       ↓
+  Service Layer        ← works ONLY with domain models
+       ↓
+    DAO Layer           ← transforms Domain ↔ Entity/ResultRow
+```
+
+Benefits:
+
+- API contracts (DTOs) are separated from business logic (domain models)
+- Changes to API don't ripple through the entire codebase
+- Read-only fields (like `created`, `changed`) are correctly handled at the boundary
+- Transformation logic is testable in isolation
+
+### Composition Over Inheritance
+
+Prefer composing functionality via constructor injection over inheritance hierarchies:
+
+```kotlin
+@Service
+class VersionServiceImpl(private val versionDAO: VersionDAO) : VersionService {
+    // Business logic delegates to DAO -- composition, not inheritance
+}
+```
+
+Entities compose relationships using extension functions rather than inheritance:
+
+```kotlin
+object PriceableObjectEntity : LongIdTable("priceable_object") {
+    fun Join.joinPriceableObjectWithChildren() =
+        Join(this)
+            .joinFarePriceToPriceableObject()
+            .joinLimitingRuleToFarePrice()
+            .withVersionsForPriceableObjects()
+}
+```
 
 ## Infrastructure Architecture
 
@@ -59,12 +138,12 @@ Domain / Model             # Domain entities, value objects
 
 ### Data Stores
 
-| Need | Service | Terraform Module |
-|------|---------|-----------------|
-| Relational data | Cloud SQL (PostgreSQL) | `terraform-google-sql-db` |
-| Caching | Memorystore (Redis) | `terraform-google-memorystore` |
-| Object storage | Cloud Storage | [`terraform-google-cloud-storage`](https://github.com/entur/terraform-google-cloud-storage) |
-| Event streaming | Pub/Sub | Use `google_pubsub_topic` / `subscription` resources |
+| Need | Service | Provisioning |
+|------|---------|-------------|
+| Relational data | Cloud SQL (PostgreSQL) | `terraform-google-sql-db` module |
+| Caching | Memorystore (Redis) | `terraform-google-memorystore` module |
+| Object storage | Cloud Storage | [`terraform-google-cloud-storage`](https://github.com/entur/terraform-google-cloud-storage) module |
+| Event streaming | Apache Kafka (Aiven-hosted) | Provisioned via Aiven; see [docs/kafka.md](kafka.md) |
 | Analytics | BigQuery | Use `google_bigquery_dataset` / `table` resources |
 
 For Cloud SQL and Memorystore, always use the Entur Terraform modules -- they handle naming, networking, secret creation, and Kubernetes integration automatically.
@@ -77,20 +156,30 @@ For Cloud SQL and Memorystore, always use the Entur Terraform modules -- they ha
 
 ## Asynchronous Messaging
 
-### Pub/Sub Patterns
+Entur uses **Apache Kafka on Aiven** as the primary event streaming platform. See [docs/kafka.md](kafka.md) for full configuration and usage documentation.
 
-- Use Pub/Sub for event-driven communication between services
-- Each consuming service has its own subscription (fan-out pattern)
-- Use dead-letter topics for messages that fail processing
-- Set appropriate acknowledgment deadlines and retry policies
-- Use ordering keys when message ordering matters
+### Kafka Patterns
+
+- Use Kafka for event-driven communication between services
+- Each consuming service has its own consumer group (fan-out pattern)
+- Use dead-letter topics (DLT) for messages that fail processing after retries
+- Use non-blocking retry with exponential backoff via `entur-kafka-spring-starter`
+- Use message keys for partition ordering when message ordering matters within an entity
+- Use the `entur-kafka-spring-starter` library (`org.entur.data:entur-kafka-spring-starter`) for all Kafka integration
+
+### Cluster Selection
+
+- **Internal clusters** (`*_INT`): for apps running inside the Kubernetes VPC
+- **Public clusters** (`*_PUBLIC_*_INT`): for local development or apps outside the VPC
+- **External clusters** (`*_EXT`): for external partner integrations
+- Authentication: SASL/SCRAM-SHA-512 over TLS
 
 ### Message Design
 
-- Use JSON or Protobuf for message serialization
-- Include a message type/version field for forward compatibility
-- Include a correlation ID for tracing
+- Use **Avro** (default) or **Protobuf** for message serialization -- schemas are managed via Confluent Schema Registry
+- Include a correlation ID for tracing (automatically added by the Kafka starter as `X-Correlation-Id` header)
 - Keep messages self-contained -- include all necessary data (avoid requiring the consumer to call back to the producer)
+- Use the Gradle Avro plugin (`com.github.davidmc24.gradle.plugin.avro`) to generate classes from `.avsc` schema files
 
 ## Database Design
 
@@ -98,10 +187,35 @@ For Cloud SQL and Memorystore, always use the Entur Terraform modules -- they ha
 
 - Use `snake_case` for table and column names
 - Use singular table names: `route`, `stop_place` (not `routes`, `stop_places`)
-- Always include `id`, `created_at`, `updated_at` columns
-- Use UUID or ULID for primary keys (not auto-incrementing integers) for distributed systems
+- Always include `id`, `created`, `changed` (or `created_at`, `updated_at`) columns
+- Use UUID or ULID for primary keys (not auto-incrementing integers) for distributed systems, or `Long` auto-increment for simpler domains
 - Use Flyway (Java/Kotlin) for database migrations
 - Prefix migration files with version numbers: `V1__create_route_table.sql`
+- Organize migrations in subdirectories: `schema/` for DDL, `reusablefunctions/` for stored procedures, `kotlin/` for code-based migrations
+- Use database views for complex read queries spanning multiple tables
+
+### SQL Library Choice (Kotlin)
+
+For Kotlin projects, prefer **JetBrains Exposed SQL-DSL** over JPA/Hibernate:
+
+- Provides a typesafe Kotlin DSL close to SQL (not an ORM)
+- Works naturally with Kotlin immutable `data class` models
+- Better control over queries, joins, and subqueries
+- Lightweight -- no magic, no lazy loading, no proxy objects
+
+Define tables as `object` extending `LongIdTable`:
+
+```kotlin
+object VersionEntity : LongIdTable("version") {
+    val netexId = varchar("netex_id", 70)
+    val created = timestamp("created")
+    val status = varchar("status", 70)
+    val startDate = date("start_date")
+    val endDate = date("end_date").nullable()
+}
+```
+
+For Java projects, **Spring Data JPA** remains the default choice.
 
 ### Migration Best Practices
 
@@ -109,6 +223,8 @@ For Cloud SQL and Memorystore, always use the Entur Terraform modules -- they ha
 - Separate schema changes from data migrations
 - Never modify an existing migration that has been applied
 - Test migrations against a copy of production data before deploying
+- Use `baseline-on-migrate` in test configuration to handle existing schemas
+- Configure Flyway migration locations per environment if needed
 
 ## Resilience Patterns
 

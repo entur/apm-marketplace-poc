@@ -60,6 +60,8 @@ Read the relevant documents below based on the task at hand. Always read `CONVEN
 | **Go application code** | [docs/go.md](docs/go.md) |
 | **API design** | [docs/api-design.md](docs/api-design.md) |
 | **Architecture decisions** | [docs/architecture.md](docs/architecture.md) |
+| **Kafka / event streaming** | [docs/kafka.md](docs/kafka.md) |
+| **Authorization / permissions** | [docs/authorization.md](docs/authorization.md) |
 | **Terraform / GCP infrastructure** | [docs/terraform/modules.md](docs/terraform/modules.md), [docs/terraform/iam-roles.md](docs/terraform/iam-roles.md) |
 | **Helm charts / Kubernetes deploy** | [docs/helm.md](docs/helm.md) |
 | **Docker / containerization** | [docs/docker.md](docs/docker.md) |

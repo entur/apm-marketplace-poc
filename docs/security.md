@@ -90,6 +90,20 @@ Rotate secrets at least every 90 days (does not apply to OAuth access/refresh to
 - Use OAuth 2.0 / OpenID Connect for user-facing APIs
 - Validate JWT tokens at the API gateway or in the application
 - Never build custom authentication -- use established libraries and protocols
+- Use Entur's OIDC auth libraries: `oidc-auth-resource-server` for token validation, `oidc-auth-client` for obtaining tokens
+
+### Authorization
+
+Entur uses a centralized authorization system based on **Permission Store** and **Permission Client**. See [authorization.md](authorization.md) for complete details.
+
+Key concepts:
+
+- **Business Capabilities**: operation + access level (LES, OPPRETT, ENDRE, SLETT) for endpoint-level access
+- **Responsibility Sets**: operation + responsibility type + object key for data-level access
+- **Agreements**: link responsibility sets to organisations
+- Use `@PreAuthorize("hasPermission('operation', 'access')")` in Spring controllers
+- Use `LOCAL_TEST_CACHE` with test users for testing
+- Use `IN_MEMORY` cache with WebSocket push notifications in production
 
 ## HTTP Security Headers
 

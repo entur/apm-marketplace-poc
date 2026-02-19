@@ -36,23 +36,39 @@ Cross-language conventions that apply to all Entur projects. Language-specific a
 my-application/
   .github/
     workflows/
-      ci.yml                    # CI pipeline (lint, test, build, scan)
-      cd.yml                    # CD pipeline (deploy to environments)
+      ci.yml                    # Reusable CI build (workflow_call)
+      ci-pr.yml                 # PR verification + CI build
+      ci-feature.yml            # Feature branch CI (if no open PR)
+      deploy.yml                # CD pipeline (dev -> tst -> prd)
       codeql.yml                # Security code scanning (MUST be named codeql.yml)
+      lint-api.yml              # API spec linting (optional, for contract-first)
+      lint-helm.yml             # Helm chart linting per environment
+    dependabot.yml              # Automated dependency updates
+    pull_request_template.md    # PR description template
   .entur/
     security/
       codescan.yml              # Code scan allowlist (optional)
       dockerscan.yml            # Docker scan allowlist (optional)
+    github-<repo-name>.yaml     # Self-service GitHub manifest
+  doc/
+    adr/                        # Architecture Decision Records (optional)
+      0001-my-decision.adoc
   docs/                         # Documentation (published via gha-docs)
   helm/
     <repo-name>/
       Chart.yaml                # Helm chart, depends on entur/common
+      Chart.lock                # Locked dependency versions
       values.yaml               # Default values
       env/
-        dev.yaml                # Dev environment overrides
-        tst.yaml                # Test environment overrides
-        prd.yaml                # Production environment overrides
+        values-kub-ent-dev.yaml        # Dev environment overrides
+        values-kub-ent-tst.yaml        # Test environment overrides
+        values-kub-ent-prd.yaml        # Production environment overrides
       tests/                    # Helm unit tests (optional)
+  specs/                        # OpenAPI specs (for contract-first APIs)
+    products.yaml               # Main OpenAPI entry point
+    schemas/                    # Reusable schemas
+    parameters/                 # Reusable parameters
+    paths/                      # Path definitions
   terraform/
     main.tf                     # Terraform configuration
     variables.tf                # Variables
@@ -61,12 +77,28 @@ my-application/
       dev.tfvars                # Dev environment variables
       tst.tfvars                # Test environment variables
       prd.tfvars                # Production environment variables
-  src/                          # Application source code
+  src/
+    main/
+      kotlin/                   # Application source code (Kotlin)
+      resources/
+        application.yml         # Default Spring Boot config
+        application-local.yml   # Local development overrides
+        db/migration/           # Flyway migrations
+    test/
+      kotlin/                   # Test source code
+      resources/
+        application.yml         # Test configuration
+        test-data/              # SQL scripts for integration tests
+  gradle/
+    libs.versions.toml          # Version catalog
+    wrapper/                    # Gradle wrapper
   Dockerfile                    # At repository root
   build.gradle.kts              # Gradle build (Java/Kotlin)
-  gradle.properties             # Version and build properties
   settings.gradle.kts           # Gradle settings
+  compose.yaml                  # Docker Compose for local development
+  .mise.toml                    # Tool version management (mise)
   README.md                     # Project documentation
+  CONTRIBUTING.md               # Developer guide and conventions
   AGENTS.md                     # AI agent instructions (references entur/ai)
 ```
 
@@ -133,6 +165,7 @@ raise Exception("not found")
 ### Test Naming
 
 - Java/Kotlin: `ClassName_methodName_expectedBehavior` or descriptive method names with `@DisplayName`
+- Kotlin preferred: backtick method names for readable sentences (e.g., `` fun `I should be able to create a new version`() ``)
 - Go: `TestFunctionName_scenario` in `_test.go` files
 - Python: `test_function_name_scenario` in `test_*.py` files
 
@@ -140,11 +173,44 @@ raise Exception("not found")
 
 - Tests must be deterministic -- no flaky tests, no dependencies on external services in unit tests
 - Use test fixtures and factories instead of constructing test data inline
+- Use the **builder pattern** for test data construction (e.g., `VersionBuilder().withStatus(DRAFT).build()`)
 - Mock external dependencies at the boundary (HTTP clients, database connections)
 - Each test should test one behavior
 - Use Arrange-Act-Assert (AAA) pattern
 - Integration tests should use testcontainers for databases and message brokers
 - Never commit tests that are `@Disabled` or `@Ignore` without a linked issue
+- Use `@Sql` annotations to load test data from SQL scripts before integration tests
+- Use `cleanup.sql` scripts to ensure clean state between tests
+- Upload test results in CI using `dorny/test-reporter` for visibility in GitHub
+
+### Test Libraries (Kotlin)
+
+| Library | Purpose |
+|---------|---------|
+| JUnit 5 | Test framework |
+| Kotest | Assertions (`shouldBe`, `shouldThrow`, `shouldHaveSize`) |
+| SpringMockK | Mocking for Spring/Kotlin (`@MockkBean`) |
+| TestContainers | Dockerized PostgreSQL for integration tests |
+| Spring Boot Test | `@SpringBootTest`, `@WebMvcTest` |
+| Entur Auth Test | `TenantJsonWebToken` for OIDC test tokens |
+
+### Test Structure
+
+```text
+src/test/
+  kotlin/org/entur/myapp/
+    config/               # Test configurations (TestContainersConfig)
+    mockdata/             # Enum-based mock data for quick reference
+    testdata/             # Test data builders (VersionBuilder)
+    utils/                # Test base classes (BaseServiceTest, BaseControllerTest)
+    version/              # Feature-specific tests
+  resources/
+    application.yml       # Test Spring configuration
+    test-init.sql         # Database initialization script
+    test-data/
+      cleanup.sql         # Truncate all tables
+      version/            # Feature-specific test data SQL
+```
 
 ## Dependency Management
 
@@ -203,6 +269,137 @@ This enables automated semantic versioning via release-please:
 - Bugfix branches: `fix/<description>`
 - PRs require review approval before merge
 - Squash merge to keep history clean
+
+## Local Development
+
+### Tool Version Management (mise)
+
+Use [mise](https://mise.jdx.dev/) (formerly rtx) for consistent tool versions across the team. Define required tools in `.mise.toml`:
+
+```toml
+[tools]
+java        = 'liberica-25.0.2+12'
+terraform   = '1.9.8'
+python      = '3.13.10'
+kotlin      = '2.3.0'
+
+[settings]
+experimental = true
+
+[env]
+CLOUDSDK_PYTHON = "python3"
+_.source = 'mise.env.sh'
+
+[hooks]
+enter = 'mise install'
+```
+
+### Docker Compose for Local Development
+
+Use `compose.yaml` at the repository root for running the full application locally:
+
+```yaml
+services:
+  app:
+    build:
+      context: .
+      secrets:
+        - ARTIFACTORY_AUTH_USER
+        - ARTIFACTORY_AUTH_TOKEN
+    ports:
+      - "8086:8086"
+    volumes:
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/gcp/creds.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcp/creds.json
+
+secrets:
+  ARTIFACTORY_AUTH_USER:
+    environment: ARTIFACTORY_AUTH_USER
+  ARTIFACTORY_AUTH_TOKEN:
+    environment: ARTIFACTORY_AUTH_TOKEN
+```
+
+### Local Spring Profile
+
+Use `application-local.yml` for local development overrides:
+
+```yaml
+entur:
+  logging:
+    style: humanReadablePlain
+  auth:
+    authorization:
+      permit-all:
+        matcher:
+          patterns:
+            - /v3/api-docs/**
+            - /swagger-ui/**
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/myapp
+    username: myapp
+    password: myapp
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+```
+
+## Architecture Decision Records (ADRs)
+
+Document significant architectural decisions in `doc/adr/` using AsciiDoc format. ADRs capture the context, decision, consequences, and alternatives considered for important technical choices.
+
+### ADR Format
+
+```asciidoc
+== N. Title of Decision
+
+Date: YYYY-MM-DD
+
+== Status
+Accepted | Proposed | Deprecated
+
+== Context
+What is the problem or situation that requires a decision?
+
+== Decision
+What is the decision and how will it be implemented?
+
+== Consequences
+=== Positive
+=== Negative
+
+== Alternatives
+What other options were considered and why were they rejected?
+```
+
+### When to Write an ADR
+
+- Choosing a framework, library, or tool over alternatives
+- Changing the architecture pattern (e.g., from ORM to SQL-DSL)
+- Adopting a new development workflow (e.g., contract-first API design)
+- Any decision that future developers would question or need context for
+
+## PR Templates
+
+Use `.github/pull_request_template.md` to ensure consistent PR descriptions:
+
+```markdown
+## Beskrivelse
+<Describe the purpose of this change in one or two sentences.>
+Fixes <JIRA ticket number>.
+
+## Huskeliste
+- [ ] Correct JIRA ticket number in PR title
+- [ ] Tests created/updated (unit/integration/Postman)
+- [ ] Documentation updated if needed
+- [ ] Consumers informed of breaking changes
+- [ ] EXPLAIN run on SQL queries and optimized if needed
+```
 
 ## Configuration Management
 

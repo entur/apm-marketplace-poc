@@ -11,20 +11,87 @@ All Entur applications deployed to Kubernetes are packaged as Docker container i
 
 ## Base Images by Language
 
-Prefer **distroless** images over Alpine when possible. Distroless images have a smaller attack surface (no shell, no package manager), smaller size, and better security. Use Alpine only when you need a shell, package manager, or in-container debugging.
+Prefer **distroless** or **slim-musl** images over full Alpine when possible. These images have a smaller attack surface (no shell, no package manager), smaller size, and better security. Use Alpine only when you need a shell, package manager, or in-container debugging.
 
-| Language | Recommended (distroless) | Alternative (Alpine/slim) |
-|----------|-------------------------|--------------------------|
-| Java/Kotlin | `gcr.io/distroless/java21-debian12` | `eclipse-temurin:21-jre-alpine` |
+| Language | Recommended | Alternative |
+|----------|------------|-------------|
+| Java/Kotlin | `bellsoft/liberica-runtime-container:jre-25-cds-slim-musl` | `eclipse-temurin:21-jre-alpine` |
 | Go | `gcr.io/distroless/static-debian12:nonroot` | `golang:1.23-alpine` (build only) |
 | Node.js | `gcr.io/distroless/nodejs24-debian12` | `node:24-alpine` |
 | Python | `gcr.io/distroless/python3-debian12` | `python:3.12-slim` |
+
+For Java/Kotlin, the **Liberica Runtime Container with CDS** is preferred because it supports Class Data Sharing for faster startup and is optimized for containerized JVM workloads.
 
 Pin base image versions to a specific tag or digest. Never use `latest`.
 
 ## Dockerfile Examples
 
-### Java / Kotlin
+### Java / Kotlin (Preferred: Multi-Stage with Layered JAR and CDS)
+
+The preferred approach uses four Docker stages for optimal build caching, image size, and startup performance:
+
+1. **Bundler** -- bundle OpenAPI spec (if contract-first)
+2. **Builder** -- compile and package the application
+3. **Layers** -- extract Spring Boot layered JAR
+4. **Run** -- minimal runtime image with CDS support
+
+```dockerfile
+# Stage 1: Bundle OpenAPI specification (contract-first only)
+FROM node:25-slim AS bundler
+WORKDIR /app
+COPY specs specs
+RUN npx @redocly/cli bundle specs/products.yaml --output specs/openapi.json
+
+# Stage 2: Build the application
+FROM gradle:9.3.1-jdk25-alpine AS builder
+WORKDIR /app
+COPY build.gradle.kts settings.gradle.kts ./
+COPY gradle/libs.versions.toml gradle/libs.versions.toml
+
+# Download dependencies first (cache layer)
+RUN --mount=type=secret,id=ARTIFACTORY_AUTH_USER,env=ARTIFACTORY_AUTH_USER  \
+    --mount=type=secret,id=ARTIFACTORY_AUTH_TOKEN,env=ARTIFACTORY_AUTH_TOKEN \
+    gradle dependencies --no-daemon
+
+COPY src src
+COPY --from=bundler /app/specs/openapi.json specs/openapi.json
+
+RUN --mount=type=secret,id=ARTIFACTORY_AUTH_USER,env=ARTIFACTORY_AUTH_USER  \
+    --mount=type=secret,id=ARTIFACTORY_AUTH_TOKEN,env=ARTIFACTORY_AUTH_TOKEN \
+    gradle bootJar -x clean -x bundleOpenApiSpecification --no-daemon
+
+# Stage 3: Extract layered JAR
+FROM bellsoft/liberica-runtime-container:jre-25-cds-slim-musl AS layers
+WORKDIR /app
+COPY --from=builder /app/build/libs/my-app.jar my-app.jar
+RUN java -Djarmode=tools -jar my-app.jar extract --layers --launcher
+
+# Stage 4: Final runtime image
+FROM bellsoft/liberica-runtime-container:jre-25-cds-slim-musl AS run
+LABEL maintainer="Team Name <team@entur.org>"
+EXPOSE 8086
+WORKDIR /app
+
+# Copy layers in order of change frequency (least to most)
+COPY --from=layers /app/my-app/dependencies/ ./
+COPY --from=layers /app/my-app/internal-dependencies/ ./
+COPY --from=layers /app/my-app/spring-boot-loader/ ./
+COPY --from=layers /app/my-app/application/ .
+
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "org.springframework.boot.loader.launch.JarLauncher"]
+```
+
+Key practices in this approach:
+
+- **Dependency caching**: Copy build files first, download dependencies, then copy source -- changes to source code don't invalidate the dependency cache layer
+- **Build secrets**: Use `--mount=type=secret` for Artifactory credentials instead of `ARG`/`ENV` (secrets don't persist in image layers)
+- **Layered JAR**: Spring Boot's layered JAR splits the application into dependency layers, so only the changed layer is rebuilt when pushing new images
+- **CDS (Class Data Sharing)**: The Liberica CDS image pre-computes class metadata for faster startup
+- **`-XX:MaxRAMPercentage=75.0`**: Let the JVM use 75% of container memory, leaving room for the OS and native memory
+
+### Java / Kotlin (Simple)
+
+For simpler projects without multi-stage builds:
 
 ```dockerfile
 FROM eclipse-temurin:21-jre-alpine

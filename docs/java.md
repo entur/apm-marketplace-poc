@@ -377,6 +377,192 @@ class RouteRepositoryIntegrationTest {
 - Testcontainers for integration tests with databases and message brokers
 - Spring Boot Test for application context tests
 
+## Redis (Memorystore)
+
+Entur uses **Google Memorystore for Redis** as a managed key-value store. Infrastructure is provisioned via the `terraform-google-memorystore` Terraform module (see [terraform/modules.md](terraform/modules.md#memorystore-redis)). Connection credentials (`REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`) are injected via Kubernetes secrets.
+
+### When to Use Redis
+
+| Use Case | Redis? | Notes |
+|----------|--------|-------|
+| Caching (HTTP responses, DB queries) | Yes | Primary use case. Reduces load on PostgreSQL |
+| Session storage | Yes | Shared sessions across pods |
+| Rate limiting / counters | Yes | Atomic `INCR` with TTL |
+| Distributed locks | Yes | Use Redisson or Spring Integration |
+| Idempotency keys (Kafka dedup) | Yes | `SET key value NX EX ttl` pattern |
+| Primary data store | **No** | Use PostgreSQL. Redis is not durable by default |
+| Complex queries / joins | **No** | Use PostgreSQL |
+| Large objects (> 1 MB) | **No** | Use Cloud Storage |
+
+### Dependencies
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+}
+```
+
+### Configuration
+
+```yaml
+# application.yml
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      timeout: 2000ms              # connection + command timeout
+      connect-timeout: 1000ms      # TCP connection timeout
+      lettuce:
+        pool:
+          max-active: 8            # max concurrent connections
+          max-idle: 8
+          min-idle: 2
+          max-wait: 1000ms         # max wait for a connection from the pool
+```
+
+### Spring Cache Abstraction
+
+The simplest approach -- use `@Cacheable` annotations with Redis as the backing store:
+
+```java
+@Configuration
+@EnableCaching
+public class CacheConfig {
+
+    @Bean
+    public RedisCacheConfiguration cacheConfiguration() {
+        return RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(10))
+            .disableCachingNullValues()
+            .serializeValuesWith(
+                RedisSerializationContext.SerializationPair
+                    .fromSerializer(new GenericJackson2JsonRedisSerializer())
+            );
+    }
+
+    @Bean
+    public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
+        return RedisCacheManager.builder(factory)
+            .cacheDefaults(cacheConfiguration())
+            .withCacheConfiguration("routes",
+                cacheConfiguration().entryTtl(Duration.ofHours(1)))   // per-cache TTL
+            .withCacheConfiguration("stops",
+                cacheConfiguration().entryTtl(Duration.ofMinutes(30)))
+            .build();
+    }
+}
+```
+
+```java
+@Service
+public class RouteService {
+
+    @Cacheable(value = "routes", key = "#id")
+    public Route findById(String id) {
+        return routeRepository.findById(id).orElseThrow();
+    }
+
+    @CacheEvict(value = "routes", key = "#id")
+    public void update(String id, UpdateRouteRequest request) {
+        // Cache entry is evicted after update
+    }
+
+    @CacheEvict(value = "routes", allEntries = true)
+    public void refreshAll() {
+        // Evict all entries in the "routes" cache
+    }
+}
+```
+
+### Direct RedisTemplate Usage
+
+For more control (counters, locks, sets, hashes):
+
+```java
+@Component
+public class RateLimiter {
+
+    private final StringRedisTemplate redis;
+
+    public RateLimiter(StringRedisTemplate redis) {
+        this.redis = redis;
+    }
+
+    public boolean isAllowed(String clientId, int maxRequests, Duration window) {
+        String key = "rate:" + clientId;
+        Long count = redis.opsForValue().increment(key);
+        if (count == 1) {
+            redis.expire(key, window);
+        }
+        return count <= maxRequests;
+    }
+}
+```
+
+### Key Naming Conventions
+
+Use a consistent prefix scheme to avoid collisions and enable monitoring:
+
+```text
+{app}:{domain}:{id}           -- entity cache
+{app}:rate:{clientId}          -- rate limiting
+{app}:lock:{resource}          -- distributed locks
+{app}:dedup:{messageId}        -- idempotency keys
+```
+
+Examples: `products-api:route:ENT:Route:123`, `products-api:rate:partner-xyz`
+
+### Best Practices
+
+- **Always set TTLs** -- never store keys without expiration. Unbounded growth will exhaust memory and cause eviction of other keys.
+- **Use `allkeys-lfu`** eviction policy (configured in Terraform) -- least-frequently-used keys are evicted first when memory is full.
+- **Keep values small** -- serialize to JSON, avoid storing entire entity graphs. Aim for < 100 KB per key.
+- **Use `NX` (set-if-not-exists)** for distributed locks and idempotency: `SET key value NX EX 60`.
+- **Handle failures gracefully** -- Redis is a cache, not a primary store. If Redis is unavailable, fall back to the database. Never let a Redis outage cause the application to fail.
+- **Avoid `KEYS *`** in production -- it blocks the single-threaded Redis server. Use `SCAN` for iteration.
+- **Use pipelining** for batch operations to reduce round trips.
+- **Namespace keys** with the application name to avoid collisions when multiple apps share a Redis instance.
+- **Monitor memory** -- set alerts on `used_memory` vs `maxmemory`. See [observability.md](observability.md) for metrics and alerting.
+- **Do not use Redis as a message queue** -- use Kafka instead. Redis Pub/Sub has no persistence or delivery guarantees.
+
+### Testing
+
+Use Testcontainers for integration tests:
+
+```java
+@SpringBootTest
+@Testcontainers
+class RedisCacheIntegrationTest {
+
+    @Container
+    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
+        .withExposedPorts(6379);
+
+    @DynamicPropertySource
+    static void configureRedis(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("spring.data.redis.password", () -> "");
+    }
+}
+```
+
+For unit tests, mock the cache or use `@MockBean` on `RedisTemplate`:
+
+```java
+@WebMvcTest(RouteController.class)
+class RouteControllerTest {
+
+    @MockBean
+    private RouteService routeService;  // caching is transparent
+
+    // Test controller behavior -- caching is an implementation detail
+}
+```
+
 ## Artifactory (JFrog)
 
 Entur uses JFrog Artifactory as the artifact repository for internal packages. Configure Gradle to resolve from Artifactory:

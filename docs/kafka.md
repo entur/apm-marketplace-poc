@@ -598,6 +598,86 @@ class KafkaIntegrationTest {
 }
 ```
 
+## Redis as Kafka State Store
+
+Redis (Memorystore) is commonly paired with Kafka consumers for deduplication, state caching, and idempotent processing. For Redis infrastructure setup, see [terraform/modules.md](terraform/modules.md#memorystore-redis). For general Redis usage patterns, see [java.md](java.md#redis-memorystore) or [go.md](go.md#redis-memorystore).
+
+### Idempotent Consumer (Deduplication)
+
+Kafka provides at-least-once delivery, meaning consumers may receive the same message more than once. Use Redis `SET NX EX` to track processed message IDs and skip duplicates:
+
+```kotlin
+@Component
+class OrderEventListener(
+    private val redis: StringRedisTemplate,
+    private val orderService: OrderService,
+) {
+    @KafkaListener(topics = ["order-events"], containerFactory = "enturListenerFactory")
+    fun onOrderEvent(
+        @Header(KafkaHeaders.RECEIVED_KEY) key: String,
+        @Header("event-id") eventId: String,
+        @Payload event: OrderEvent,
+    ) {
+        val dedupKey = "myapp:dedup:$eventId"
+
+        // SET NX -- returns true only if key was newly created
+        val isNew = redis.opsForValue()
+            .setIfAbsent(dedupKey, "1", Duration.ofHours(24)) ?: false
+
+        if (!isNew) {
+            log.info("Duplicate event skipped: {}", eventId)
+            return
+        }
+
+        orderService.processOrder(event)
+    }
+}
+```
+
+**TTL guidance**: Set the deduplication key TTL to at least the maximum expected redelivery window. 24 hours is a safe default. If your retry/DLT configuration retries for at most 2 hours, a 4-hour TTL is sufficient.
+
+### Consumer State Cache
+
+When a consumer needs to enrich events with reference data, use Redis to cache lookups and avoid repeated database queries:
+
+```kotlin
+@Component
+class EnrichmentListener(
+    private val redis: StringRedisTemplate,
+    private val productRepository: ProductRepository,
+    private val objectMapper: ObjectMapper,
+) {
+    @KafkaListener(topics = ["raw-events"], containerFactory = "enturListenerFactory")
+    fun onEvent(@Payload event: RawEvent) {
+        val product = getCachedProduct(event.productId)
+        val enriched = event.enrich(product)
+        // ... produce enriched event or persist
+    }
+
+    private fun getCachedProduct(productId: String): Product {
+        val key = "myapp:product:$productId"
+        val cached = redis.opsForValue().get(key)
+        if (cached != null) {
+            return objectMapper.readValue(cached, Product::class.java)
+        }
+
+        val product = productRepository.findById(productId)
+            ?: throw IllegalStateException("Product not found: $productId")
+
+        redis.opsForValue().set(key, objectMapper.writeValueAsString(product), Duration.ofMinutes(30))
+        return product
+    }
+}
+```
+
+### Best Practices for Redis + Kafka
+
+- **Always use TTLs** on deduplication and cache keys -- Kafka consumer patterns can generate large volumes of keys.
+- **Handle Redis failures gracefully** -- if Redis is down, either process the message (risking duplicates) or throw to trigger Kafka retry. Choose based on your idempotency requirements.
+- **Use the event ID or Kafka offset as the dedup key** -- `{topic}:{partition}:{offset}` is naturally unique.
+- **Do not use Redis as a Kafka replacement** -- Redis Pub/Sub has no persistence, no consumer groups, and no delivery guarantees.
+- **Namespace keys** with the application name to avoid collisions: `myapp:dedup:`, `myapp:cache:`.
+
 ## Observability
 
 The starter automatically registers **Micrometer/Prometheus** listeners on both producer and consumer factories when a `MeterRegistry` bean is present. This exposes standard Kafka client metrics (e.g., `kafka_producer_*`, `kafka_consumer_*`) to your Prometheus endpoint without additional configuration.

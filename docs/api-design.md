@@ -240,6 +240,7 @@ EnturMetadata()
 The starter **automatically generates** `x-entur-permissions` on every operation based on the `@PreAuthorize` annotation. No code changes are needed -- if your controller already uses `@PreAuthorize("hasPermission('resource', 'les')")`, the extension is added to the OpenAPI spec at runtime.
 
 The parser understands:
+
 - `hasPermission('resource', 'access')` -- single permission
 - `hasPermission('a', 'les') AND hasPermission('b', 'les')` -- all required (`all`)
 - `hasPermission('a', 'les') OR hasPermission('b', 'les')` -- any sufficient (`any`)
@@ -315,6 +316,7 @@ public record Item(String id, String description) {
 ```
 
 The example method must be:
+
 - `static` (`@JvmStatic` in Kotlin companion objects)
 - Annotated with `@SchemaExample`
 - Return an instance of the enclosing class

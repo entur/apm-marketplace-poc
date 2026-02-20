@@ -1,4 +1,4 @@
-# Entur AI Agents
+# Entur AI Agents POC
 
 > Centralized AI agent instructions for generating standardized code with Entur best practices.
 

@@ -59,6 +59,20 @@ Use responsibility sets when you need to restrict access to specific data partit
 
 ## Adding Authorization to Your Application
 
+### Prerequisites
+
+Your application must have Auth0 internal M2M credentials provisioned to authenticate with Permission Store. In your self-service application manifest, ensure:
+
+```yaml
+spec:
+  auth0:
+    internal:
+      enabled: true
+      type: m2m
+```
+
+See [self-service.md](self-service.md) for details on application manifests.
+
 ### 1. Add Dependencies
 
 ```kotlin
@@ -526,12 +540,13 @@ This means applications must regularly refresh their registration with Permissio
 
 ### Minimal Setup Checklist
 
-1. Add `permission-client` + `oidc-auth` dependencies
-2. Configure `entur.auth.tenants` in `application.yml`
-3. Configure `entur.clients.auth0.permission-store` credentials
-4. Configure `entur.permission.permission-cache` with URL and application name
-5. Declare `businessCapabilities` used by your application
-6. Add `@PreAuthorize("hasPermission('operation', 'access')")` to protected endpoints
-7. Add `entur-springdoc-starter` to auto-document permissions in the OpenAPI spec (see [api-design.md](api-design.md#x-entur-permissions-extension-automatic))
-8. Configure `LOCAL_TEST_CACHE` with test users in test `application.yml`
-9. Set environment-specific Permission Store URL and auth config via Helm configmap
+1. Ensure `auth0.internal.enabled: true` and `auth0.internal.type: m2m` in your self-service application manifest
+2. Add `permission-client` + `oidc-auth` dependencies
+3. Configure `entur.auth.tenants` in `application.yml`
+4. Configure `entur.clients.auth0.permission-store` credentials
+5. Configure `entur.permission.permission-cache` with URL and application name
+6. Declare `businessCapabilities` used by your application
+7. Add `@PreAuthorize("hasPermission('operation', 'access')")` to protected endpoints
+8. Add `entur-springdoc-starter` to auto-document permissions in the OpenAPI spec (see [api-design.md](api-design.md#x-entur-permissions-extension-automatic))
+9. Configure `LOCAL_TEST_CACHE` with test users in test `application.yml`
+10. Set environment-specific Permission Store URL and auth config via Helm configmap

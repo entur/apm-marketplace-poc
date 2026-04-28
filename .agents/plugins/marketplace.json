@@ -5,16 +5,40 @@
   },
   "plugins": [
     {
-      "name": "entur-bootstrap",
+      "name": "bootstrap",
       "source": {
         "source": "local",
-        "path": "./plugins/entur-bootstrap"
+        "path": "./plugins/bootstrap"
       },
       "policy": {
         "installation": "AVAILABLE",
         "authentication": "ON_INSTALL"
       },
       "category": "Scaffolding"
+    },
+    {
+      "name": "scr",
+      "source": {
+        "source": "local",
+        "path": "./plugins/scr"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Writing"
+    },
+    {
+      "name": "cicd-workflows",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cicd-workflows"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "DevOps"
     }
   ]
 }

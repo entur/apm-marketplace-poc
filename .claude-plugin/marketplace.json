@@ -12,11 +12,39 @@
   },
   "plugins": [
     {
-      "name": "entur-bootstrap",
-      "source": "./plugins/entur-bootstrap",
+      "name": "bootstrap",
+      "source": "./plugins/bootstrap",
       "description": "Bootstrap a new Entur app: self-service manifests, Helm, Terraform, Docker, and CI/CD wired together with consistent identifiers.",
       "category": "scaffolding",
       "keywords": ["entur", "bootstrap", "scaffold", "gcp", "helm", "terraform", "cicd"],
+      "author": {
+        "name": "Team Plattform",
+        "email": "support@entur.org"
+      },
+      "homepage": "https://github.com/entur/ai",
+      "repository": "https://github.com/entur/ai",
+      "license": "EUPL-1.2"
+    },
+    {
+      "name": "scr",
+      "source": "./plugins/scr",
+      "description": "Structure problems and decisions in SCR format (Situation, Complication, Resolution).",
+      "category": "writing",
+      "keywords": ["entur", "scr", "writing", "communication", "leadership"],
+      "author": {
+        "name": "Team Plattform",
+        "email": "support@entur.org"
+      },
+      "homepage": "https://github.com/entur/ai",
+      "repository": "https://github.com/entur/ai",
+      "license": "EUPL-1.2"
+    },
+    {
+      "name": "cicd-workflows",
+      "source": "./plugins/cicd-workflows",
+      "description": "Generate Entur-standard CI/CD GitHub Actions workflows (ci, build, cd, pr, codeql) for Kotlin/Java, Go, or Python projects.",
+      "category": "devops",
+      "keywords": ["entur", "cicd", "github-actions", "workflows", "kotlin", "java", "go", "python"],
       "author": {
         "name": "Team Plattform",
         "email": "support@entur.org"

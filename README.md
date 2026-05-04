@@ -1,5 +1,7 @@
 # Entur AI
 
+> **Audience:** Entur employees using or contributing to this repo. AI coding agents should start at [AGENTS.md](AGENTS.md).
+
 Hey! Welcome to Entur's shared AI resources.
 
 This is where we keep everything that helps AI agents and assistants work better at Entur -- from coding standards that agents use to generate platform-compliant code, to reusable skills that supercharge your day-to-day work.
@@ -17,6 +19,8 @@ This is where we keep everything that helps AI agents and assistants work better
 **Coding agent instructions** help agents like Claude Code, GitHub Copilot, and Cursor generate code that follows Entur's platform conventions. Instead of every team maintaining their own copy of "how we do things at Entur", we keep it here and everyone points their agents to it.
 
 **Skills** are reusable instruction sets that give AI assistants specialized capabilities -- like drafting architecture decision records, summarizing Slack threads, or navigating Entur-specific tooling. See [`skills/README.md`](skills/README.md) for the full catalogue and how to use them.
+
+**Plugins** wrap skills and other tools and can be installed in one command via the Claude Code or Codex CLI plugin marketplaces. See [Install via plugin marketplace](#install-via-plugin-marketplace) below.
 
 ## Quick Start
 
@@ -69,6 +73,38 @@ https://github.com/entur/ai/blob/main/AGENTS.md
 - Stores processed data in BigQuery
 - No external API -- internal consumer only
 ```
+
+## Install via plugin marketplace
+
+If you use Claude Code or the Codex CLI, you can install skills as plugins from the `entur/ai` marketplace instead of copying files manually.
+
+### Claude Code
+
+```shell
+claude plugin marketplace add entur/ai
+claude # then run /plugin to browse
+```
+
+### Codex CLI
+
+```shell
+codex plugin marketplace add entur/ai
+codex # then run /plugins to browse
+```
+
+## Install individual skills (any agent)
+
+For agents without a plugin marketplace, two CLIs can pull skills directly from this repo:
+
+```shell
+# Vercel Labs CLI (https://github.com/vercel-labs/skills)
+npx skills add entur/ai
+
+# gh CLI (https://cli.github.com/manual/gh_skill_install)
+gh skill install entur/ai
+```
+
+Both walk the repo for `SKILL.md` files and let you pick which to install into your local agent skill folder. See [`skills/README.md`](skills/README.md) for the full install matrix.
 
 ## Agent Compatibility
 

@@ -6,6 +6,42 @@ This repository publishes granular marketplace packages so teams can install the
 
 APM and Claude-compatible marketplace artifacts use a top-level `plugins` array. In this repository, those plugin entries package **skills**: each local plugin directory contains metadata plus a `skills/` link to the underlying skill source. There are no prompt, hook, MCP server, or agent packages yet because this repository does not currently contain those primitives.
 
+## Install APM
+
+Install the APM CLI before registering this marketplace.
+
+**macOS / Linux:**
+
+```shell
+curl -sSL https://aka.ms/apm-unix | sh
+```
+
+**Windows PowerShell:**
+
+```powershell
+irm https://aka.ms/apm-windows | iex
+```
+
+Alternative package managers:
+
+```shell
+# macOS / Linux
+brew install microsoft/apm/apm
+
+# Windows
+scoop bucket add apm https://github.com/microsoft/scoop-apm
+scoop install apm
+
+# Python 3.10+
+pip install apm-cli
+```
+
+Verify the installation:
+
+```shell
+apm --version
+```
+
 ## Install the marketplace
 
 ```shell

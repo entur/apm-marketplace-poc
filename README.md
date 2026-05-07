@@ -1,223 +1,157 @@
-# Entur AI
+# Entur APM Marketplace
 
-> **Audience:** Entur employees using or contributing to this repo. AI coding agents should start at [AGENTS.md](AGENTS.md).
+Curated APM marketplace for Entur AI agent plugins and skills.
 
-Hey! Welcome to Entur's shared AI resources.
+This repository publishes granular marketplace packages so teams can install the broad Entur toolbox or discover the exact convention area they need.
 
-This is where we keep everything that helps AI agents and assistants work better at Entur -- from coding standards that agents use to generate platform-compliant code, to reusable skills that supercharge your day-to-day work.
+APM and Claude-compatible marketplace artifacts use a top-level `plugins` array. In this repository, those plugin entries package **skills**: each local plugin directory contains metadata plus a `skills/` link to the underlying skill source. There are no prompt, hook, MCP server, or agent packages yet because this repository does not currently contain those primitives.
 
-> **Heads up:** The files in `guides/` are written primarily for AI agents to consume, not humans. They're dense, structured for machine readability, and intentionally light on code examples (the AI figures out the implementation from your project's own codebase). This is still very much a work in progress -- things will change, improve, and expand over time. It works well today, but we're iterating!
-
-## What's in this repo
-
-| Folder    | Purpose                                                        |
-|-----------|----------------------------------------------------------------|
-| `guides/` | Coding standards and platform conventions for AI coding agents |
-| `skills/` | Reusable AI skills for day-to-day work across teams            |
-| `tests/`  | Comprehension tests that verify AI agents understand the docs  |
-
-**Coding agent instructions** help agents like Claude Code, GitHub Copilot, and Cursor generate code that follows Entur's platform conventions. Instead of every team maintaining their own copy of "how we do things at Entur", we keep it here and everyone points their agents to it.
-
-**Skills** are reusable instruction sets that give AI assistants specialized capabilities -- like drafting architecture decision records, summarizing Slack threads, or navigating Entur-specific tooling. See [`skills/README.md`](skills/README.md) for the full catalogue and how to use them.
-
-**Plugins** wrap skills and other tools and can be installed in one command via the Claude Code or Codex CLI plugin marketplaces. See [Install via plugin marketplace](#install-via-plugin-marketplace) below.
-
-## Quick Start
-
-Create an `AGENTS.md` file in your repository root that points the AI agent to this repository:
-
-```markdown
-# My Application
-
-Java 25 / Spring Boot application that provides the route planning API.
-
-## Entur Standards
-
-Read and follow the Entur platform standards at:
-https://github.com/entur/ai/blob/main/AGENTS.md
-
-When working on a specific task, also read the relevant guides
-linked from that file (e.g. java.md, helm.md, docker.md).
-
-## Project-Specific
-
-- Uses PostgreSQL via Cloud SQL
-- Publishes events to Pub/Sub topic `route-updates`
-- Custom health indicator for external route provider connectivity
-```
-
-That's it. `AGENTS.md` is read automatically by GitHub Copilot and [many other agents](https://agents.md). Claude Code reads `CLAUDE.md` instead -- see [Agent Compatibility](#agent-compatibility) for details. The agent will fetch the linked URL to get the full platform standards.
-
-### Tips for a good `AGENTS.md`
-
-- **Describe your application** in the first few lines -- language, framework, what it does
-- **Link to the shared standards** so the agent knows Entur conventions
-- **Add project-specific context** -- database, messaging, special patterns, team conventions
-- **List any overrides** if your project deviates from the shared standards
-
-### Example for a Go service
-
-```markdown
-# My Go Service
-
-Go 1.25 service that processes transit data feeds.
-
-## Entur Standards
-
-Read and follow the Entur platform standards at:
-https://github.com/entur/ai/blob/main/AGENTS.md
-
-## Project-Specific
-
-- Uses Cloud Pub/Sub for event processing
-- Stores processed data in BigQuery
-- No external API -- internal consumer only
-```
-
-## Install via plugin marketplace
-
-If you use Claude Code or the Codex CLI, you can install skills as plugins from the `entur/ai` marketplace instead of copying files manually.
-
-### Claude Code
+## Install the marketplace
 
 ```shell
-claude plugin marketplace add entur/ai
-claude # then run /plugin to browse
+apm marketplace add entur/apm-marketplace-poc
 ```
 
-### Codex CLI
+The marketplace declares `name: entur`, so APM registers it under the `entur` alias unless you override it:
 
 ```shell
-codex plugin marketplace add entur/ai
-codex # then run /plugins to browse
+apm marketplace add entur/apm-marketplace-poc --name entur
 ```
 
-## Install individual skills (any agent)
-
-For agents without a plugin marketplace, two CLIs can pull skills directly from this repo:
+Browse everything:
 
 ```shell
-# Vercel Labs CLI (https://github.com/vercel-labs/skills)
-npx skills add entur/ai
-
-# gh CLI (https://cli.github.com/manual/gh_skill_install)
-gh skill install entur/ai
+apm marketplace browse entur
 ```
 
-Both walk the repo for `SKILL.md` files and let you pick which to install into your local agent skill folder. See [`skills/README.md`](skills/README.md) for the full install matrix.
+Search within this marketplace:
 
-## Agent Compatibility
+```shell
+apm search "terraform@entur"
+apm search "kotlin@entur"
+apm search "cicd@entur"
+```
 
-| Agent          | Reads `AGENTS.md`       | Can fetch URLs | Notes                                                                        |
-| -------------- | ----------------------- | -------------- | ---------------------------------------------------------------------------- |
-| Claude Code    | No (reads `CLAUDE.md`)  | Yes            | Natively reads `CLAUDE.md`; create a symlink or copy for Claude Code support |
-| GitHub Copilot | Yes                     | Limited        | Reads `AGENTS.md`; may not fetch URLs in all modes                           |
-| opencode       | Yes                     | Unknown        | Reads `AGENTS.md` natively                                                   |
+## AI primitives
 
-`AGENTS.md` is supported by a [large ecosystem of AI coding agents](https://agents.md) including Codex, Gemini CLI, Jules, Windsurf, Aider, and many more.
+| Primitive | Marketplace status |
+|-----------|--------------------|
+| Skills | Published as installable APM packages. |
+| Prompts | Not present yet. Add prompt files under a plugin package before listing them. |
+| Hooks | Not present yet. Add hook resources under a plugin package before listing them. |
+| MCP servers | Not present yet. Add MCP configuration/resources under a plugin package before listing them. |
+| Agents | Not present yet. Add agent definitions under a plugin package before listing them. |
 
-Claude Code reads `CLAUDE.md`, not `AGENTS.md`. To support Claude Code alongside other agents, create a symlink: `ln -s AGENTS.md CLAUDE.md`.
+## Core skill packages
 
-For agents that cannot fetch URLs, the most important rules are already inline in your project's `AGENTS.md`. For deeper coverage, you can copy key sections from this repo into your project's instructions.
+| Package | Primitive | Purpose |
+|---------|-----------|---------|
+| `bootstrap` | Skill | Bootstrap a new Entur app with self-service manifests, Helm, Terraform, Docker, and CI/CD wired together with consistent identifiers. |
+| `cicd-workflows` | Skill | Generate Entur-standard CI/CD GitHub Actions workflows for Kotlin/Java, Go, or Python projects. |
+| `scr` | Skill | Structure problems and decisions in Situation, Complication, Resolution format. |
+| `conventions` | Skill | Full Entur platform convention router for AI agents. |
 
-## Documentation Structure
+Install with:
+
+```shell
+apm install bootstrap@entur
+apm install cicd-workflows@entur
+apm install scr@entur
+apm install conventions@entur
+```
+
+## Granular convention skill packages
+
+The convention packages below all resolve to the shared `plugins/guides` router, but they are listed separately so marketplace browsing, search, and dependency provenance are topic-specific.
+
+| Package | Primitive | Focus |
+|---------|-----------|-------|
+| `conventions-api-design` | Skill | REST and gRPC API contracts |
+| `conventions-architecture` | Skill | Service boundaries, GCP project structure, resilience, production hardening |
+| `conventions-authorization` | Skill | Permission Store, Permission Client, OAuth/OIDC, Spring Security |
+| `conventions-cicd-actions` | Skill | Shared and composite GitHub Actions |
+| `conventions-cicd-workflows` | Skill | Entur reusable CI/CD workflows |
+| `conventions-code-review` | Skill | Code review checklist and review conventions |
+| `conventions-docker` | Skill | Dockerfiles, multi-stage builds, distroless images |
+| `conventions-documentation` | Skill | Documentation and user-facing prose |
+| `conventions-go` | Skill | Go services |
+| `conventions-helm` | Skill | Helm, Kubernetes, GKE, and the Entur common chart |
+| `conventions-iam-roles` | Skill | Approved Google Cloud IAM roles |
+| `conventions-java` | Skill | Java and Spring Boot services |
+| `conventions-kafka` | Skill | Kafka producers, consumers, schemas, and Aiven Kafka |
+| `conventions-kotlin` | Skill | Kotlin and Spring Boot services |
+| `conventions-logging` | Skill | Structured logging |
+| `conventions-markdown` | Skill | Markdown and markdownlint conventions |
+| `conventions-observability` | Skill | Health checks, Prometheus metrics, logging, tracing |
+| `conventions-security` | Skill | Secrets, security scanning, allowlists, headers |
+| `conventions-self-service` | Skill | Self-service manifests and GCP project naming |
+| `conventions-terraform` | Skill | Entur Terraform modules and GCP resources |
+
+Example installs:
+
+```shell
+apm install conventions-kotlin@entur
+apm install conventions-terraform@entur
+apm install conventions-security@entur
+```
+
+## Repository layout
 
 ```text
-AGENTS.md                       # Top-level agent routing and critical rules
-CONVENTIONS.md                  # Cross-language coding conventions
-guides/
-  java.md                       # Java standards (Spring Boot, Gradle)
-  kotlin.md                     # Kotlin standards
-  go.md                         # Go standards
-  docker.md                     # Containerization with Docker
-  api-design.md                 # REST and gRPC API design
-  architecture.md               # Service and infrastructure architecture
-  logging.md                    # Structured logging
-  observability.md              # Health checks, metrics, tracing
-  security.md                   # Secrets, scanning, IAM
-  code-review.md                # Review checklist
-  helm.md                       # Entur common Helm chart reference
-  self-service.md               # Self-service provisioning, manifests, onboarding
-  markdown.md                   # Markdown standards and linting
-  terraform/
-    modules.md                  # Terraform modules (init, SQL, Redis, GCS)
-    iam-roles.md                # Approved IAM roles
-  cicd/
-    workflows.md                # CI/CD pipeline reference
-    actions.md                  # Composite actions reference
-skills/
-  README.md                     # Skill catalogue, usage guide, and how to contribute
-  entur-project-bootstrap/      # Bootstrap a new app (self-service, Helm, TF, Docker, CI/CD)
-  setup-cicd-workflows/         # Generate CI/CD workflows by language
-tests/
-  README.md                     # Test usage guide and how to add scenarios
-  main.go                       # Test runner (Go, stdlib only)
-  scenario.go                   # Scenario parser and assertion evaluator
-  scenario_test.go              # Unit tests for the parser
-  scenarios/                    # Test scenarios (one .md file per test)
+apm.yml                           # Hand-edited APM marketplace source of truth
+.claude-plugin/marketplace.json   # Generated marketplace artifact from `apm pack`
+plugins/                          # Local packages exposed by the marketplace
+skills/                           # Source skills used by plugin packages
+guides/                           # Entur platform conventions used by the skills
+tests/                            # Documentation comprehension tests
 ```
 
-AI agents read `AGENTS.md` first, which routes them to the relevant sub-documents based on the task.
+APM uses a single source-of-truth model:
 
-## Shared Tooling Referenced
+1. Edit `apm.yml`.
+2. Run `apm pack`.
+3. Commit both `apm.yml` and `.claude-plugin/marketplace.json`.
 
-| Category              | Tools                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Terraform modules** | [terraform-google-init](https://github.com/entur/terraform-google-init), [terraform-google-sql-db](https://github.com/entur/terraform-google-sql-db), [terraform-google-memorystore](https://github.com/entur/terraform-google-memorystore), [terraform-google-cloud-storage](https://github.com/entur/terraform-google-cloud-storage)                                                                                                                                              |
-| **Helm charts**       | [helm-charts](https://github.com/entur/helm-charts) (common chart)                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **CI/CD workflows**   | [gha-docker](https://github.com/entur/gha-docker), [gha-helm](https://github.com/entur/gha-helm), [gha-terraform](https://github.com/entur/gha-terraform), [gha-security](https://github.com/entur/gha-security), [gha-meta](https://github.com/entur/gha-meta), [gha-firebase](https://github.com/entur/gha-firebase), [gha-docs](https://github.com/entur/gha-docs), [gha-slack](https://github.com/entur/gha-slack), [gha-artifactory](https://github.com/entur/gha-artifactory) |
+The generated `.claude-plugin/marketplace.json` is the marketplace artifact consumed by Claude Code, Copilot CLI, and APM. Do not edit it by hand.
 
-## Contributing
+## Maintaining packages
 
-This is a shared resource for all of Entur, and we'd love your help making it better! Every contribution matters -- whether it's fixing a typo, clarifying a confusing section, adding a new skill, or sharing a pattern that works well for your team.
+Add or update packages in `marketplace.packages` in `apm.yml`. Marketplace entries should be granular enough to be searchable, and their `tags` should include the primitive type (`skill`, `prompt`, `hook`, `mcp`, or `agent`):
 
-A few ways to contribute:
-
-- **Found something wrong or unclear?** Open an issue or just submit a PR directly
-- **Have a pattern or skill that works great for your team?** Share it! Others will benefit
-- **Not sure if something belongs here?** Open an issue and let's figure it out together
-- **Want to improve the AI output for your stack?** Try tweaking the relevant `guides/` file and see how your agent responds -- that's the fastest feedback loop
-
-When submitting changes:
-
-1. Use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) for commit messages
-2. Keep in mind the audience is AI agents, not humans -- be precise and structured
-3. **Run the comprehension tests** before opening a PR (see below)
-4. Get a review from the platform team
-
-### Comprehension Tests (required)
-
-The `tests/` directory contains automated tests that verify AI agents correctly understand the documentation. These tests send real prompts to Claude, let it read the docs, and validate that the answers are correct.
-
-**You must run these tests before submitting changes to any guide.** A documentation change that humans can read but AI agents misinterpret is a regression.
-
-```bash
-# Prerequisite: Go 1.25+ and claude CLI installed
-
-# Dry run -- validate scenario syntax, no API calls
-go run ./tests --dry-run
-
-# Full suite -- ~$0.18, ~90 seconds
-go run ./tests --verbose
-
-# Run a single scenario for faster iteration
-go run ./tests --scenario "05-*" --verbose
+```yaml
+marketplace:
+  packages:
+    - name: conventions-example
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur example conventions.
+      tags: [entur, conventions, example]
 ```
 
-The tests cover:
+Then regenerate the marketplace:
 
-| Scenario | What it verifies |
-|----------|-----------------|
-| 01-kotlin-api | Identity chain: metadata.id → GCP projects, Helm shortname, Terraform app_id |
-| 02-go-service | Go-specific: health paths, distroless image, metrics path |
-| 03-data-project | Data project naming: `ent-data-{id}-{int\|ext}-{env}` |
-| 04-firebase-app | Firebase uses standard `ent-{id}-{env}`, not a special prefix |
-| 05-derive-from-manifest | Distinguishes metadata.id from metadata.name (the #1 confusion) |
-| 06-critical-rules | Refuses to create GCP projects via Terraform |
+```shell
+apm pack
+```
 
-If you change a guide and a test starts failing, either fix the guide or update the test scenario. See [`tests/README.md`](tests/README.md) for how to add new scenarios.
+Preview without writing:
 
-For questions, ideas, or just to say hi, find us in `#talk-utviklerplattform` on Slack.
+```shell
+apm pack --dry-run
+```
+
+`apm marketplace check` is useful for remote package entries. This marketplace currently uses local-path entries, which are validated by `apm pack`.
+
+## Development checks
+
+Run the lightweight test pass before opening a pull request:
+
+```shell
+cd tests
+go run . --dry-run
+```
+
+If you change guides or skills, run the relevant comprehension tests described in `tests/README.md`.
 
 ## License
 

@@ -1,0 +1,230 @@
+name: entur
+version: 0.1.0
+description: Curated Entur AI agent plugins and skills for building on the Entur platform
+marketplace:
+  owner:
+    name: Team Plattform
+    url: https://github.com/entur
+    email: support@entur.org
+  metadata:
+    homepage: https://github.com/entur/apm-marketplace-poc
+    description: Coding agent skills and tools for building on the Entur platform
+    primitives:
+      - skill
+  packages:
+    - name: bootstrap
+      source: ./plugins/bootstrap
+      version: 0.1.0
+      description: Bootstrap a new Entur app with self-service manifests, Helm, Terraform, Docker, and CI/CD wired together with consistent identifiers.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, bootstrap, scaffold, gcp, helm, terraform, cicd]
+    - name: cicd-workflows
+      source: ./plugins/cicd-workflows
+      version: 0.1.0
+      description: Generate Entur-standard CI/CD GitHub Actions workflows for Kotlin/Java, Go, or Python projects.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, cicd, github-actions, workflows, kotlin, java, go, python]
+    - name: scr
+      source: ./plugins/scr
+      version: 0.1.0
+      description: Structure problems and decisions in SCR format (Situation, Complication, Resolution).
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, scr, writing, communication, leadership]
+    - name: conventions
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Full Entur platform convention router for AI agents.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, guides]
+    - name: conventions-api-design
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur API design conventions for REST and gRPC contracts.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, api, rest, grpc]
+    - name: conventions-architecture
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur architecture conventions for service boundaries, GCP project structure, resilience, and production hardening.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, architecture, gcp]
+    - name: conventions-authorization
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur authorization conventions for Permission Store, Permission Client, OAuth, OIDC, and Spring Security.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, authorization, oauth, oidc, permission-store]
+    - name: conventions-cicd-actions
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur conventions for shared and composite GitHub Actions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, cicd, github-actions]
+    - name: conventions-cicd-workflows
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur reusable CI/CD workflow conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, cicd, github-actions, workflows]
+    - name: conventions-code-review
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur code review checklist and review conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, code-review]
+    - name: conventions-docker
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Docker conventions for container images, multi-stage builds, and distroless runtime images.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, docker, containers, distroless]
+    - name: conventions-documentation
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur conventions for writing documentation and user-facing prose.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, documentation, writing]
+    - name: conventions-go
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Go service conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, go]
+    - name: conventions-helm
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Helm and Kubernetes deployment conventions using the common chart.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, helm, kubernetes, gke]
+    - name: conventions-iam-roles
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur approved Google Cloud IAM roles and role assignment conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, iam, gcp, security]
+    - name: conventions-java
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Java and Spring Boot service conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, java, spring-boot]
+    - name: conventions-kafka
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Kafka conventions for producers, consumers, schemas, and Aiven Kafka.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, kafka, aiven]
+    - name: conventions-kotlin
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Kotlin and Spring Boot service conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, kotlin, spring-boot]
+    - name: conventions-logging
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur structured logging conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, logging, observability]
+    - name: conventions-markdown
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Markdown style and markdownlint conventions.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, markdown, documentation]
+    - name: conventions-observability
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur observability conventions for health checks, Prometheus metrics, logging, and tracing.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, observability, metrics, tracing]
+    - name: conventions-security
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur security conventions for secrets, security scanning, allowlists, and headers.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, security, secrets]
+    - name: conventions-self-service
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur self-service manifest conventions, including metadata.id versus metadata.name and GCP project naming.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, self-service, gcp, manifests]
+    - name: conventions-terraform
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Entur Terraform module conventions for GCP resources.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags: [entur, skill, conventions, terraform, gcp]

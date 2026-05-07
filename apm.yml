@@ -1,0 +1,77 @@
+name: entur
+version: 0.1.0
+description: Curated Entur AI agent plugins and skills for building on the Entur platform
+marketplace:
+  owner:
+    name: Team Plattform
+    url: https://github.com/entur
+    email: support@entur.org
+  metadata:
+    homepage: https://github.com/entur/apm-marketplace-poc
+  packages:
+    - name: bootstrap
+      source: ./plugins/bootstrap
+      version: 0.1.0
+      description: Bootstrap a new Entur app with self-service manifests, Helm, Terraform, Docker, and CI/CD wired together with consistent identifiers.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags:
+        - entur
+        - bootstrap
+        - scaffold
+        - gcp
+        - helm
+        - terraform
+        - cicd
+    - name: scr
+      source: ./plugins/scr
+      version: 0.1.0
+      description: Structure problems and decisions in SCR format (Situation, Complication, Resolution).
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags:
+        - entur
+        - scr
+        - writing
+        - communication
+        - leadership
+    - name: cicd-workflows
+      source: ./plugins/cicd-workflows
+      version: 0.1.0
+      description: Generate Entur-standard CI/CD GitHub Actions workflows for Kotlin/Java, Go, or Python projects.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags:
+        - entur
+        - cicd
+        - github-actions
+        - workflows
+        - kotlin
+        - java
+        - go
+        - python
+    - name: guides
+      source: ./plugins/guides
+      version: 0.1.0
+      description: Route Entur platform convention questions to the matching guide for AI agents.
+      homepage: https://github.com/entur/apm-marketplace-poc
+      repository: https://github.com/entur/apm-marketplace-poc
+      license: EUPL-1.2
+      author: Team Plattform
+      tags:
+        - entur
+        - guides
+        - conventions
+        - kotlin
+        - java
+        - go
+        - helm
+        - terraform
+        - kafka
+        - security

@@ -1,70 +1,99 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "entur",
-  "description": "Entur platform AI toolbox: reusable skills, agents, and hooks for Entur developers",
   "owner": {
     "name": "Team Plattform",
-    "email": "support@entur.org"
+    "email": "support@entur.org",
+    "url": "https://github.com/entur"
   },
   "metadata": {
-    "description": "Coding agent skills and tools for building on the Entur platform"
+    "homepage": "https://github.com/entur/apm-marketplace-poc"
   },
   "plugins": [
     {
       "name": "bootstrap",
-      "source": "./plugins/bootstrap",
-      "description": "Bootstrap a new Entur app: self-service manifests, Helm, Terraform, Docker, and CI/CD wired together with consistent identifiers.",
-      "category": "scaffolding",
-      "keywords": ["entur", "bootstrap", "scaffold", "gcp", "helm", "terraform", "cicd"],
+      "description": "Bootstrap a new Entur app with self-service manifests, Helm, Terraform, Docker, and CI/CD wired together with consistent identifiers.",
+      "version": "0.1.0",
       "author": {
-        "name": "Team Plattform",
-        "email": "support@entur.org"
+        "name": "Team Plattform"
       },
-      "homepage": "https://github.com/entur/ai",
-      "repository": "https://github.com/entur/ai",
-      "license": "EUPL-1.2"
+      "license": "EUPL-1.2",
+      "repository": "https://github.com/entur/apm-marketplace-poc",
+      "tags": [
+        "entur",
+        "bootstrap",
+        "scaffold",
+        "gcp",
+        "helm",
+        "terraform",
+        "cicd"
+      ],
+      "homepage": "https://github.com/entur/apm-marketplace-poc",
+      "source": "./plugins/bootstrap"
     },
     {
       "name": "scr",
-      "source": "./plugins/scr",
       "description": "Structure problems and decisions in SCR format (Situation, Complication, Resolution).",
-      "category": "writing",
-      "keywords": ["entur", "scr", "writing", "communication", "leadership"],
+      "version": "0.1.0",
       "author": {
-        "name": "Team Plattform",
-        "email": "support@entur.org"
+        "name": "Team Plattform"
       },
-      "homepage": "https://github.com/entur/ai",
-      "repository": "https://github.com/entur/ai",
-      "license": "EUPL-1.2"
+      "license": "EUPL-1.2",
+      "repository": "https://github.com/entur/apm-marketplace-poc",
+      "tags": [
+        "entur",
+        "scr",
+        "writing",
+        "communication",
+        "leadership"
+      ],
+      "homepage": "https://github.com/entur/apm-marketplace-poc",
+      "source": "./plugins/scr"
     },
     {
       "name": "cicd-workflows",
-      "source": "./plugins/cicd-workflows",
-      "description": "Generate Entur-standard CI/CD GitHub Actions workflows (ci, build, cd, pr, codeql) for Kotlin/Java, Go, or Python projects.",
-      "category": "devops",
-      "keywords": ["entur", "cicd", "github-actions", "workflows", "kotlin", "java", "go", "python"],
+      "description": "Generate Entur-standard CI/CD GitHub Actions workflows for Kotlin/Java, Go, or Python projects.",
+      "version": "0.1.0",
       "author": {
-        "name": "Team Plattform",
-        "email": "support@entur.org"
+        "name": "Team Plattform"
       },
-      "homepage": "https://github.com/entur/ai",
-      "repository": "https://github.com/entur/ai",
-      "license": "EUPL-1.2"
+      "license": "EUPL-1.2",
+      "repository": "https://github.com/entur/apm-marketplace-poc",
+      "tags": [
+        "entur",
+        "cicd",
+        "github-actions",
+        "workflows",
+        "kotlin",
+        "java",
+        "go",
+        "python"
+      ],
+      "homepage": "https://github.com/entur/apm-marketplace-poc",
+      "source": "./plugins/cicd-workflows"
     },
     {
       "name": "guides",
-      "source": "./plugins/guides",
-      "description": "Routes Entur platform conventions to AI agents on demand. The skill fetches the matching guide from the entur/ai repo so contributors only need to add a markdown file under guides/.",
-      "category": "documentation",
-      "keywords": ["entur", "guides", "conventions", "kotlin", "java", "go", "helm", "terraform", "kafka", "security"],
+      "description": "Route Entur platform convention questions to the matching guide for AI agents.",
+      "version": "0.1.0",
       "author": {
-        "name": "Team Plattform",
-        "email": "support@entur.org"
+        "name": "Team Plattform"
       },
-      "homepage": "https://github.com/entur/ai",
-      "repository": "https://github.com/entur/ai",
-      "license": "EUPL-1.2"
+      "license": "EUPL-1.2",
+      "repository": "https://github.com/entur/apm-marketplace-poc",
+      "tags": [
+        "entur",
+        "guides",
+        "conventions",
+        "kotlin",
+        "java",
+        "go",
+        "helm",
+        "terraform",
+        "kafka",
+        "security"
+      ],
+      "homepage": "https://github.com/entur/apm-marketplace-poc",
+      "source": "./plugins/guides"
     }
   ]
 }
